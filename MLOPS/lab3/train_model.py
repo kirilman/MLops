@@ -28,8 +28,9 @@ def eval_metrics(actual, pred):
     return rmse, mae, r2
 
 
-if name == "__main__":
+if __name__ == "__main__":
     df = pd.read_csv("./df_clear.csv")
+    print(df.shape)
     X,Y, power_trans = scale_frame(df)
     X_train, X_val, y_train, y_val = train_test_split(X, Y,
                                                     test_size=0.3,
