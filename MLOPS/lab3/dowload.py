@@ -1,4 +1,5 @@
 import pandas as pd
+from sklearn.preprocessing import OrdinalEncoder
 
 def download_data():
     df = pd.read_csv('https://raw.githubusercontent.com/dayekb/Basic_ML_Alg/main/cars_moldova_no_dup.csv', delimiter = ',')
@@ -40,7 +41,7 @@ def clear_data(path2df):
     
     df = df.reset_index(drop=True)  
     ordinal = OrdinalEncoder()
-    ordinal.fit(df[cat_columns]);
+    ordinal.fit(df[cat_columns])
     Ordinal_encoded = ordinal.transform(df[cat_columns])
     df_ordinal = pd.DataFrame(Ordinal_encoded, columns=cat_columns)
     df[cat_columns] = df_ordinal[cat_columns]
@@ -48,3 +49,4 @@ def clear_data(path2df):
     return True
 
 download_data()
+clear_data("cars.csv")
