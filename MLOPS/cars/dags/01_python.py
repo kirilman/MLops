@@ -83,7 +83,7 @@ def analyze_cars(**context):
         return
 
     # Пример анализа: средняя цена по году
-    summary = df.groupby("Year")["Price_euro"].agg(
+    summary = df.groupby("Year")["Priceeuro"].agg(
         mean_price="mean",
         count="count",
         min_price="min",
