@@ -5,6 +5,8 @@ import pandas as pd
 from flask import Flask, jsonify, request
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import check_password_hash, generate_password_hash
+import redis
+import json
 
 DEFAULT_ITEMS_PER_PAGE = 100
 
@@ -21,7 +23,7 @@ def _read_cars(file_path):
     except Exception as e:
         raise e
 
-
+r = redis.Redis(host="redis", port=6379, decode_responses=True) 
 
 app = Flask(__name__)
 app.config["cars"] = _read_cars("app/cars.csv")
@@ -50,81 +52,64 @@ def hello():
 @app.route("/cars")
 @auth.login_required
 def cars():
-    """
-    Returns car records with optional filtering and pagination.
+    # 
+    if r:
+        cache_key = "cars:" + str(sorted(request.args.items()))
+        cached = r.get(cache_key)
+        if cached:
+            data = json.loads(cached)
+            data["from_cache"] = True  # Помечаем, что из кэша
+            return jsonify(data)
 
-    Query Parameters
-    ----------------
-    min_year : int
-        Minimum year (inclusive).
-    max_year : int
-        Maximum year (inclusive).
-    min_price : float
-        Minimum price (inclusive).
-    max_price : float
-        Maximum price (inclusive).
-    fuel_type : int
-        type code (e.g., 0=petrol, 1=diesel, 2=electric, etc.).
-    transmission : int
-        Transmission type: 0=auto, 1=manual.
-    make : str
-        Partial or full match for Make (case-insensitive).
-    model : str
-        Partial or full match for Model (case-insensitive).
-    offset : int
-        Pagination offset (default: 0).
-    limit : int
-        Max number of results (default: 100).
-    """
     cars_df = app.config["cars"]
 
-    # Apply filters
+    # Фильтры
     if "min_year" in request.args:
         min_y = int(request.args["min_year"])
         cars_df = cars_df[cars_df["Year"] >= min_y]
-
     if "max_year" in request.args:
         max_y = int(request.args["max_year"])
         cars_df = cars_df[cars_df["Year"] <= max_y]
-
     if "min_price" in request.args:
         min_p = float(request.args["min_price"])
         cars_df = cars_df[cars_df["Price_euro"] >= min_p]
-
     if "max_price" in request.args:
         max_p = float(request.args["max_price"])
         cars_df = cars_df[cars_df["Price_euro"] <= max_p]
-
     if "fuel_type" in request.args:
         ft = int(request.args["fuel_type"])
         cars_df = cars_df[cars_df["Fuel_type"] == ft]
-
     if "transmission" in request.args:
         tr = int(request.args["transmission"])
         cars_df = cars_df[cars_df["Transmission"] == tr]
-
     if "make" in request.args:
         make_query = request.args["make"].lower()
         cars_df = cars_df[cars_df["Make"].astype(str).str.lower().str.contains(make_query)]
-
     if "model" in request.args:
         model_query = request.args["model"].lower()
         cars_df = cars_df[cars_df["Model"].astype(str).str.lower().str.contains(model_query)]
 
-    # Pagination
+    # Пагинация
     offset = int(request.args.get("offset", 0))
     limit = int(request.args.get("limit", DEFAULT_ITEMS_PER_PAGE))
-
     subset = cars_df.iloc[offset : offset + limit]
 
-    return jsonify(
-        {
-            "result": subset.to_dict(orient="records"),
-            "offset": offset,
-            "limit": limit,
-            "total": len(cars_df),
-        }
-    )
+    response = {
+        "result": subset.to_dict(orient="records"),
+        "offset": offset,
+        "limit": limit,
+        "total": len(cars_df),
+        "from_cache": False
+    }
+
+    #Сохраняем в кэш (если Redis доступен)
+    if r:
+        try:
+            r.setex(cache_key, 60, json.dumps(response))
+        except Exception as e:
+            print(f"⚠️ Cache write error: {e}")
+
+    return jsonify(response)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8081)  
