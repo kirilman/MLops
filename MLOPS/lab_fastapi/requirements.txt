@@ -3,3 +3,6 @@ fastapi
 pydantic
 uvicorn
 pandas
+pytest
+httpx
+pytest-asyncio
